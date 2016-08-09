@@ -1,0 +1,18 @@
+ABOUT
+
+This is script for unpack/pack deb packages.
+
+INSTALL
+    Copy to PATH.
+	sudo ln -s  dpkg-repack /usr/bin
+
+USAGE
+	dpkg-repack -u <package.deb> for unpack package.deb
+	dpkg-repack -p <package.deb> for pack package.deb, whose unpacked command below.
+	
+	
+Authors:
+	Copyright (c) 2016 by Germanov Konstantin, antwise.prog@gmail.com
+
+License: 	
+	MIT	

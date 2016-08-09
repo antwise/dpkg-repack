@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# *******************************************************************
+# *          This script for pack/unpack deb packages
+# *******************************************************************
+
+DST_PACKAGE=
+MODE=
+PREFIX_UNPACK_DIR="unpack_"
+POSTFIX_PACK_DIR="_packed"
+UNPACK_CONTROLS_DIR="control_dir"
+UNPACK_DATA_DIR="data_dir"
+
+function printMessage
+{
+    green='\E[40;32m'
+    white='\E[40;37m'
+    echo -e ${green}$@${white}
+}
+
+function printError
+{
+    red='\E[40;31m'
+    white='\E[40;37m'
+    echo -e ${red}$@${white}
+}
+
+function abort
+{
+    printError "$1 Use -h for detailed help."
+    exit 1
+}
+
+# **************************
+function unpack
+{
+   printMessage "Try unpack $DST_PACKAGE"
+   [[ ! -e $DST_PACKAGE ]] && abort "Cannot read $DST_PACKAGE."
+
+   CurrentDir=${PWD}
+
+   NamePackage=${DST_PACKAGE##*/}
+   UNPACK_DIR=${PREFIX_UNPACK_DIR}${NamePackage}
+
+   rm -rf $UNPACK_DIR 2>&1 > /dev/null
+   mkdir ${UNPACK_DIR}
+   mkdir ${UNPACK_DIR}/${UNPACK_CONTROLS_DIR}
+   mkdir ${UNPACK_DIR}/${UNPACK_DATA_DIR}
+
+   cp $1 "${UNPACK_DIR}/$NamePackage" &&
+   cd ${UNPACK_DIR} &&
+   ar -x $NamePackage &&
+   tar --directory ${UNPACK_CONTROLS_DIR} -xf control.tar.gz &&
+   tar --directory ${UNPACK_DATA_DIR} -xf data.tar.gz &&
+   rm -rf data.tar.gz &&
+   rm -rf control.tar.gz &&
+   rm -rf $NamePackage &&
+   printMessage "Unpack to ${UNPACK_DIR}."||
+       printError "Cannot unpack."
+
+   cd ${CurrentDir}
+}
+
+function pack
+{
+   printMessage "Try pack $DST_PACKAGE"
+
+   if [ -d $DST_PACKAGE ]; then
+       UNPACK_DIR=$DST_PACKAGE
+       NamePackage=`basename "$DST_PACKAGE"`
+       NamePackage=${NamePackage##${PREFIX_UNPACK_DIR}}
+   else
+       NamePackage=${DST_PACKAGE##*/}
+       UNPACK_DIR=${PREFIX_UNPACK_DIR}${NamePackage}
+       [[ ! -e $UNPACK_DIR ]] && abort "Cannot read $UNPACK_DIR or not exists $DST_PACKAGE. Do you realy unpacked $DST_PACKAGE?."
+   fi
+
+   DestNamePackage=${NamePackage%.*}${POSTFIX_PACK_DIR}.deb
+   CurrentDir=${PWD}
+   cd ${UNPACK_DIR}/${UNPACK_CONTROLS_DIR} &&
+   tar -cf ../control.tar.gz * &&
+   cd ../${UNPACK_DATA_DIR} &&
+   tar -cf ../data.tar.gz * &&
+   cd .. &&
+   ar -qS $DestNamePackage debian-binary control.tar.gz data.tar.gz &&
+   chmod +x $DestNamePackage &&
+   mv -f $DestNamePackage ${CurrentDir} &&
+   printMessage "Pack to $DestNamePackage." ||
+      printError "Cannot pack."
+
+   cd ${CurrentDir}
+   rm -rf "${UNPACK_DIR}"
+}
+
+# **************************
+function printHelp
+{
+    echo "This is a script for pack/unpack deb package."
+    echo "  $0 -u <package.deb>"
+    echo "  $0 -p <unpacked_directory|package.deb> "
+    echo "  $0 -h"
+    echo ""
+    echo "Options:"
+    echo "  -u  - unpack package.deb"
+    echo "  -p  - pack unpacked_directory"
+    echo "  -h  - show this screen"
+    echo ""
+    exit 0
+}
+
+function readArguments
+{
+    OPTIND=1
+    while getopts :puh OPTION
+    do
+        case "$OPTION"
+        in
+            p) MODE=${MODE}pack;;
+            u) MODE=${MODE}unpack;;
+            h) printHelp;;
+            *) abort "invalid option: -$OPTARG.";;
+        esac
+    done
+
+    shift $((OPTIND-1))
+    DST_PACKAGE=$1
+
+    if [ -z "$DST_PACKAGE" ]; then
+       abort "Destination not setted."
+    fi
+}
+
+function main
+{
+   readArguments $@
+   case "$MODE"
+   in
+     pack)   pack $DST_PACKAGE ;;
+     unpack) unpack $DST_PACKAGE;;
+     *)      abort "Unrecognize operation."
+    esac
+}
+
+main $@
